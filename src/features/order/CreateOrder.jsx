@@ -1,7 +1,14 @@
 import { Form, redirect, useActionData, useNavigation } from 'react-router-dom';
+import {useState} from 'react'
 import { createOrder } from '../../services/apiRestaurant';
 import Button from '../../ui/Button';
-import {useSelector} from "react-redux";
+import {useDispatch, useSelector} from "react-redux";
+import {clearCart, getCart, getTotalCartPrice} from "../cart/cartSlice.js";
+import EmptyCart from "../cart/EmptyCart.jsx";
+import store from "../../store.js";
+import { formatCurrency } from '../../utils/helpers.js';
+import {fetchAddress} from "../user/userSlice.js";
+
 
 // https://uibakery.io/regex-library/phone-number
 const isValidPhone = (str) =>
@@ -9,35 +16,17 @@ const isValidPhone = (str) =>
     str
   );
 
-// /*
-const fakeCart = [
-  {
-    pizzaId: 12,
-    name: 'Mediterranean',
-    quantity: 2,
-    unitPrice: 16,
-    totalPrice: 32,
-  },
-  {
-    pizzaId: 6,
-    name: 'Vegetale',
-    quantity: 1,
-    unitPrice: 13,
-    totalPrice: 13,
-  },
-  {
-    pizzaId: 11,
-    name: 'Spinach and Mushroom',
-    quantity: 1,
-    unitPrice: 15,
-    totalPrice: 15,
-  },
-];
-
-// */
 
 function CreateOrder() {
   const {username} = useSelector(state => state.user.username);
+  const [withPriority, setWithPriority] =useState(false);
+  const cart = useSelector(getCart);
+  const totalCartPrice = useSelector(getTotalCartPrice);
+  const priorityPrice  =  withPriority ? totalCartPrice * 0.2  : 0
+  const totalPrice = totalCartPrice + priorityPrice
+
+
+  const dispatch = useDispatch();
 
   const navigation = useNavigation();
   const isSubmitting = navigation.state === 'submitting';
@@ -45,11 +34,15 @@ function CreateOrder() {
 
   const formError = useActionData();
   // console.log(formError);
-  const cart = fakeCart;
+  // const cart = fakeCart;
 
+
+  if (!cart.length) return <EmptyCart />;
   return (
     <div className="py-4 px-6 ">
       <h2 className="text-xl mb-8 font-semibold">Ready to order? Let&apos;s go!</h2>
+
+      <button onClick={() => dispatch(fetchAddress())} >Get Possition</button>
 
       <Form method="POST">
         <div className="mb-5 flex gap-2 flex-col sm:flex-row sm:itens-center ">
@@ -96,8 +89,8 @@ function CreateOrder() {
             name="priority"
             id="priority"
             className="h-6 w-6 accent-sky-500 border-2 rounded border-slate-300 focus:ring-2 focus:ring-sky-500 focus:ring-offset-2"
-          // value={withPriority}
-          // onChange={(e) => setWithPriority(e.target.checked)}
+          value={withPriority}
+          onChange={(e) => setWithPriority(e.target.checked)}
           />
 
 
@@ -110,7 +103,7 @@ function CreateOrder() {
             disabled={isSubmitting}
             type='primary'
           >
-            {isSubmitting ? 'placing order...' : 'Order now'}
+            {isSubmitting ? 'placing order...' : `Order now from ${formatCurrency(totalCartPrice)}`}
           </Button>
         </div>
       </Form>
@@ -127,14 +120,16 @@ export async function action({ request }) {
   const order = {
     ...data,
     cart: JSON.parse(data.cart),
-    priority: data.priority === 'on',
+    priority: data.priority === 'true',
   };
 
   // console.log(order);
-  const newOrder = await createOrder(order);
   // console.log(newOrder);
 
   const error = {};
+
+
+
   if (!isValidPhone(order.phone)) {
     error.phone = 'Invalid phone number';
   }
@@ -144,6 +139,12 @@ export async function action({ request }) {
   }
 
   // console.log(customer, phone, address, priority);
+  const newOrder = await createOrder(order);
+  console.log("store", store);
+
+
+  store .dispatch(clearCart());
+
 
   return redirect(`/order/${newOrder.id}`);
 }
